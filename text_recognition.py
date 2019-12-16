@@ -57,22 +57,33 @@ def decode_predictions(scores, geometry):
 	#return tuple of bounding boxes and confidence scores
 	return (rects, confidences)
 
-
+"""
 #argument parsing
 ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--image", type=str, help="path to input image")
-ap.add_argument("-east", "--east", type=str, help="path to input EAST text detector")
+ap.add_argument("-i", "--image", type=str, default="images/example_03.jpg", help="path to input image")
+ap.add_argument("-east", "--east", type=str, default="frozen_east_text_detection.pb", help="path to input EAST text detector")
 ap.add_argument("-c", "--min-confidence", type=float, default=0.5, help="minimum probability required to inspect a region")
 ap.add_argument("-w", "--width", type=int, default=320, help="nearest multiple of 32 for resized width")
 ap.add_argument("-e", "--height", type=int, default=320, help="nearest multiple of 32 for resized height")
-ap.add_argument("-p", "--padding", type=float, default=0.05, help="amount of padding to add to each border of ROI")
+ap.add_argument("-p", "--padding", type=float, default=0.20, help="amount of padding to add to each border of ROI")
 args = vars(ap.parse_args())
+"""
 
 ##text detection
+args = {
+	"image": "images/example_03.jpg",
+	"east": "frozen_east_text_detection.pb",
+	"min_confidence": .5,
+	"width": 320,
+	"height": 320,
+	"padding": .20,
+	"x-padding": .30,
+	"y-padding": .1,
+}
 
 #load image and take dimensions
-image = cv2.imread(args["image"]);
-orig = image.copy();
+image = cv2.imread(args["image"])
+orig = image.copy()
 (orig_height, orig_width) = image.shape[:2]
 
 #set new height and width, calculate ratio difference for bounding boxes
@@ -109,7 +120,67 @@ boxes = non_max_suppression(np.array(rects), probs=confidences)
 
 results = []
 
-#loop over bounding boxes
+#pad boxes to create overlap
+index = 0
+for (startX, startY, endX, endY) in boxes:
+	#calculate padding
+	dX = int((endX - startX) * args["x-padding"])
+	dY = int((endY - startY) * args["y-padding"])
+	
+	#apply padding to improve results
+	startX = max(0, startX - dX)
+	startY = max(0, startY - dY)
+	endX = min(orig_width, endX + (dX * 2))
+	endY = min(orig_height, endY + (dY * 2))
+
+	boxes[index] = startX, startY, endX, endY
+	
+	index = index + 1
+
+print(len(boxes))
+
+#combine boxes:
+box_i = 0
+while (box_i < len(boxes)):
+	print("box combining")
+
+	remove = []
+	x1, y1, ex1, ey1 = boxes[box_i]
+
+	for j in range(0, len(boxes)):
+		x2, y2, ex2, ey2 = boxes[j]
+		if (x1 == x2 and y1 == y2 and ex1 == ex2 and ey1 == ey2):
+			continue
+
+		if (x1 > ex2 or x2 > ex1):
+			continue
+
+		if (y1 > ey2 or y2 > ey1):
+			continue
+
+		#combine
+		nx = min(x1, x2)
+		ny = min(y1, y2)
+		nex = max(ex1, ex2)
+		ney = max(ey1, ey2)
+
+		boxes[box_i] = nx, ny, nex, ney
+		x1, y1, ex1, ey1 = nx, ny, nex, ney
+		remove.append(j)
+
+	remove = remove[::-1]
+	
+	#print(boxes)
+	#print(remove)
+	for val in remove:
+		print("removing box")
+		boxes = np.delete(boxes, val, 0)
+	#print(boxes)
+	if (len(remove) == 0):
+		box_i = box_i + 1
+	
+print(len(boxes))
+#apply tesseract
 for (startX, startY, endX, endY) in boxes:
 	#scale bounding boxes to ratio
 	startX = int(startX * ratio_width)
@@ -117,21 +188,23 @@ for (startX, startY, endX, endY) in boxes:
 	endX = int(endX * ratio_width)
 	endY = int(endY * ratio_height)
 	
+	"""
 	#calculate padding
-	dX = int((endX - startX) * args["padding"])
-	dY = int((endY - startY) * args["padding"])
-	
+	dX = int((endX - startX) * args["x-padding"])
+	dY = int((endY - startY) * args["y-padding"])
+
 	#apply padding to improve results
 	startX = max(0, startX - dX)
 	startY = max(0, startY - dY)
 	endX = min(orig_width, endX + (dX * 2))
 	endY = min(orig_height, endY + (dY * 2))
-	
+	"""
+
 	#extract padded ROI
 	roi = orig[startY:endY, startX:endX]
 
 	#(1) language english, (2) 1 for LSTM neural network model, (3) 7 for ROI as single line of text
-	config = ("-l eng --oem 1 --psm 7")
+	config = ("-l eng --oem 1 --psm 3")
 	#apply Tesseract (used to find text)
 	text = pytesseract.image_to_string(roi, config=config) #returns predicted text
 	
