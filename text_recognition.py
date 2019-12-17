@@ -71,7 +71,7 @@ args = vars(ap.parse_args())
 
 ##text detection
 args = {
-	"image": "images/example_02.jpg",
+	"image": "images/example_04.jpg",
 	"east": "frozen_east_text_detection.pb",
 	"min_confidence": .5,
 	"width": 320,
@@ -80,145 +80,159 @@ args = {
 	"y-padding": .12,
 }
 
-#load image and take dimensions
-image = cv2.imread(args["image"])
-orig = image.copy()
-(orig_height, orig_width) = image.shape[:2]
+def main(img_name):
 
-#set new height and width, calculate ratio difference for bounding boxes
-(new_height, new_width) = (args["width"], args["height"])
-ratio_height = orig_height / float(new_height)
-ratio_width = orig_width / float(new_width)
+	args["image"] = img_name
 
-#resize images, get dimensions
-image = cv2.resize(image, (new_width, new_height))
-(height, width) = image.shape[:2]
+	#load image and take dimensions
+	image = cv2.imread(args["image"])
+	orig = image.copy()
+	(orig_height, orig_width) = image.shape[:2]
 
-#define two output layers for EAST detector model
-#one for probabilities, one for bounding box coordinates
+	#set new height and width, calculate ratio difference for bounding boxes
+	(new_height, new_width) = (args["width"], args["height"])
+	ratio_height = orig_height / float(new_height)
+	ratio_width = orig_width / float(new_width)
 
-layer_names = ["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]
+	#resize images, get dimensions
+	image = cv2.resize(image, (new_width, new_height))
+	(height, width) = image.shape[:2]
 
-#load EAST text detector (pre-trained)
-print("[INFO] loading EAST text detector...")
-net = cv2.dnn.readNet(args["east"])
+	#define two output layers for EAST detector model
+	#one for probabilities, one for bounding box coordinates
 
-#construct blob from image, use model to create two output layer sets
-blob = cv2.dnn.blobFromImage(image, 1.0, (width, height),
+	layer_names = ["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]
+
+	#load EAST text detector (pre-trained)
+	print("[INFO] loading EAST text detector...")
+	net = cv2.dnn.readNet(args["east"])
+
+	#construct blob from image, use model to create two output layer sets
+	blob = cv2.dnn.blobFromImage(image, 1.0, (width, height),
 	(123.68, 116.78, 103.94), swapRB=True, crop=False)
 						
-net.setInput(blob)
-(scores, geometry) = net.forward(layer_names) #pass through neural network
+	net.setInput(blob)
+	(scores, geometry) = net.forward(layer_names) #pass through neural network
 
-#decode predictions
-(rects, confidences) = decode_predictions(scores, geometry)
-#apply non-maxima suppression (suppresses weak overlapping boxes)
-boxes = non_max_suppression(np.array(rects), probs=confidences)
+	#decode predictions
+	(rects, confidences) = decode_predictions(scores, geometry)
+	#apply non-maxima suppression (suppresses weak overlapping boxes)
+	boxes = non_max_suppression(np.array(rects), probs=confidences)
 
-##text dectection done, recognition:
+	##text dectection done, recognition:
 
-results = []
+	results = []
 
-#pad boxes to create overlap
-index = 0
-for (startX, startY, endX, endY) in boxes:
-	#calculate padding
-	dX = int((endX - startX) * args["x-padding"])
-	dY = int((endY - startY) * args["y-padding"])
-	
-	#apply padding to improve results
-	startX = max(0, startX - dX)
-	startY = max(0, startY - dY)
-	endX = min(orig_width, endX + (dX * 2))
-	endY = min(orig_height, endY + (dY * 2))
+	#pad boxes to create overlap
+	index = 0
+	for (startX, startY, endX, endY) in boxes:
+		#calculate padding
+		dX = int((endX - startX) * args["x-padding"])
+		dY = int((endY - startY) * args["y-padding"])
 
-	boxes[index] = startX, startY, endX, endY
-	
-	index = index + 1
+		#apply padding to improve results
+		startX = max(0, startX - dX)
+		startY = max(0, startY - dY)
+		endX = min(orig_width, endX + (dX * 2))
+		endY = min(orig_height, endY + (dY * 2))
 
-#combine boxes:
-box_i = 0
-while (box_i < len(boxes)):
+		boxes[index] = startX, startY, endX, endY
 
-	remove = []
-	x1, y1, ex1, ey1 = boxes[box_i]
+		index = index + 1
 
-	for j in range(0, len(boxes)):
-		x2, y2, ex2, ey2 = boxes[j]
-		if (x1 == x2 and y1 == y2 and ex1 == ex2 and ey1 == ey2):
-			continue
+	#combine boxes:
+	box_i = 0
+	while (box_i < len(boxes)):
 
-		if (x1 > ex2 or x2 > ex1):
-			continue
+		remove = []
+		x1, y1, ex1, ey1 = boxes[box_i]
 
-		if (y1 > ey2 or y2 > ey1):
-			continue
+		for j in range(0, len(boxes)):
+			x2, y2, ex2, ey2 = boxes[j]
+			if (x1 == x2 and y1 == y2 and ex1 == ex2 and ey1 == ey2):
+				continue
 
-		#combine
-		nx = min(x1, x2)
-		ny = min(y1, y2)
-		nex = max(ex1, ex2)
-		ney = max(ey1, ey2)
+			if (x1 > ex2 or x2 > ex1):
+				continue
 
-		boxes[box_i] = nx, ny, nex, ney
-		x1, y1, ex1, ey1 = nx, ny, nex, ney
-		remove.append(j)
+			if (y1 > ey2 or y2 > ey1):
+				continue
 
-	remove = remove[::-1]
-	
-	#print(boxes)
-	#print(remove)
-	for val in remove:
-		boxes = np.delete(boxes, val, 0)
-	#print(boxes)
-	if (len(remove) == 0):
-		box_i = box_i + 1
-	
-#apply tesseract
-for (startX, startY, endX, endY) in boxes:
-	#scale bounding boxes to ratio
-	startX = int(startX * ratio_width)
-	startY = int(startY * ratio_height)
-	endX = int(endX * ratio_width)
-	endY = int(endY * ratio_height)
-	
+			#combine
+			nx = min(x1, x2)
+			ny = min(y1, y2)
+			nex = max(ex1, ex2)
+			ney = max(ey1, ey2)
+
+			boxes[box_i] = nx, ny, nex, ney
+			x1, y1, ex1, ey1 = nx, ny, nex, ney
+			remove.append(j)
+
+		remove = remove[::-1]
+
+		#print(boxes)
+		#print(remove)
+		for val in remove:
+			boxes = np.delete(boxes, val, 0)
+		#print(boxes)
+		if (len(remove) == 0):
+			box_i = box_i + 1
+
+	#apply tesseract
+	for (startX, startY, endX, endY) in boxes:
+		#scale bounding boxes to ratio
+		startX = int(startX * ratio_width)
+		startY = int(startY * ratio_height)
+		endX = int(endX * ratio_width)
+		endY = int(endY * ratio_height)
+
+		"""
+		#calculate padding
+		dX = int((endX - startX) * args["x-padding"])
+		dY = int((endY - startY) * args["y-padding"])
+
+		#apply padding to improve results
+		startX = max(0, startX - dX)
+		startY = max(0, startY - dY)
+		endX = min(orig_width, endX + (dX * 2))
+		endY = min(orig_height, endY + (dY * 2))
+		"""
+
+		#extract padded ROI
+		roi = orig[startY:endY, startX:endX]
+
+		#(1) language english, (2) 1 for LSTM neural network model, (3) 7 for ROI as single line of text
+		config = ("-l eng --oem 1 --psm 4")
+		#apply Tesseract (used to find text)
+		text = pytesseract.image_to_string(roi, config=config) #returns predicted text
+
+		#add bounding box coords and OCR'd tex to results
+		results.append(((startX, startY, endX, endY), text))
+
+	#sort results, bounding boxes top to bottom
+	results = sorted(results, key=lambda r:r[0][1])
+
+	final_string = ""
+
+	#loop over results
+	for ((startX, startY, endX, endY), text) in results:
+		final_string = final_string + text + "\n"
+
+		"""
+		print("OCR TEXT")
+		print("========")
+		print("{}\n".format(text))
+		"""
+
+	return final_string
+
+
 	"""
-	#calculate padding
-	dX = int((endX - startX) * args["x-padding"])
-	dY = int((endY - startY) * args["y-padding"])
-
-	#apply padding to improve results
-	startX = max(0, startX - dX)
-	startY = max(0, startY - dY)
-	endX = min(orig_width, endX + (dX * 2))
-	endY = min(orig_height, endY + (dY * 2))
-	"""
-
-	#extract padded ROI
-	roi = orig[startY:endY, startX:endX]
-
-	#(1) language english, (2) 1 for LSTM neural network model, (3) 7 for ROI as single line of text
-	config = ("-l eng --oem 1 --psm 4")
-	#apply Tesseract (used to find text)
-	text = pytesseract.image_to_string(roi, config=config) #returns predicted text
-	
-	#add bounding box coords and OCR'd tex to results
-	results.append(((startX, startY, endX, endY), text))
-	
-#sort results, bounding boxes top to bottom
-results = sorted(results, key=lambda r:r[0][1])
-
-#loop over results
-for ((startX, startY, endX, endY), text) in results:
-	print("OCR TEXT")
-	print("========")
-	print("{}\n".format(text))
-	
 	##Draw results on image
-	
+
 	#strip non-ASCII
 	text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
-	
+
 	#draw bounding box and text
 	output = orig.copy()
 	cv2.rectangle(output, (startX, startY), (endX, endY),
@@ -228,3 +242,4 @@ for ((startX, startY, endX, endY), text) in results:
 		
 	cv2.imshow("Text Detection", output)
 	cv2.waitKey(0)
+	"""
