@@ -71,14 +71,13 @@ args = vars(ap.parse_args())
 
 ##text detection
 args = {
-	"image": "images/example_03.jpg",
+	"image": "images/example_02.jpg",
 	"east": "frozen_east_text_detection.pb",
 	"min_confidence": .5,
 	"width": 320,
 	"height": 320,
-	"padding": .20,
-	"x-padding": .30,
-	"y-padding": .1,
+	"x-padding": .10,
+	"y-padding": .12,
 }
 
 #load image and take dimensions
@@ -137,12 +136,9 @@ for (startX, startY, endX, endY) in boxes:
 	
 	index = index + 1
 
-print(len(boxes))
-
 #combine boxes:
 box_i = 0
 while (box_i < len(boxes)):
-	print("box combining")
 
 	remove = []
 	x1, y1, ex1, ey1 = boxes[box_i]
@@ -173,13 +169,11 @@ while (box_i < len(boxes)):
 	#print(boxes)
 	#print(remove)
 	for val in remove:
-		print("removing box")
 		boxes = np.delete(boxes, val, 0)
 	#print(boxes)
 	if (len(remove) == 0):
 		box_i = box_i + 1
 	
-print(len(boxes))
 #apply tesseract
 for (startX, startY, endX, endY) in boxes:
 	#scale bounding boxes to ratio
@@ -204,7 +198,7 @@ for (startX, startY, endX, endY) in boxes:
 	roi = orig[startY:endY, startX:endX]
 
 	#(1) language english, (2) 1 for LSTM neural network model, (3) 7 for ROI as single line of text
-	config = ("-l eng --oem 1 --psm 3")
+	config = ("-l eng --oem 1 --psm 4")
 	#apply Tesseract (used to find text)
 	text = pytesseract.image_to_string(roi, config=config) #returns predicted text
 	
