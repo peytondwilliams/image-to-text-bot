@@ -224,6 +224,13 @@ def main(img_name):
 		print("{}\n".format(text))
 		"""
 
+
+	if (len(final_string) == 0):
+		final_string = "Beep Boop I'm a bot. No text found in image."
+
+	else:
+		final_string = "Beep Boop I'm a bot. Text found in image:\n\n" + final_string
+
 	return final_string
 
 
