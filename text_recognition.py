@@ -98,6 +98,7 @@ def main(img_name):
 	image = cv2.resize(image, (new_width, new_height))
 	(height, width) = image.shape[:2]
 
+
 	#define two output layers for EAST detector model
 	#one for probabilities, one for bounding box coordinates
 
@@ -126,6 +127,7 @@ def main(img_name):
 	#pad boxes to create overlap
 	index = 0
 	for (startX, startY, endX, endY) in boxes:
+		
 		#calculate padding
 		dX = int((endX - startX) * args["x-padding"])
 		dY = int((endY - startY) * args["y-padding"])
@@ -133,8 +135,8 @@ def main(img_name):
 		#apply padding to improve results
 		startX = max(0, startX - dX)
 		startY = max(0, startY - dY)
-		endX = min(orig_width, endX + (dX * 2))
-		endY = min(orig_height, endY + (dY * 2))
+		endX = min(width, endX + (dX * 2))
+		endY = min(height, endY + (dY * 2))
 
 		boxes[index] = startX, startY, endX, endY
 
@@ -170,21 +172,20 @@ def main(img_name):
 
 		remove = remove[::-1]
 
-		#print(boxes)
-		#print(remove)
 		for val in remove:
 			boxes = np.delete(boxes, val, 0)
-		#print(boxes)
+
 		if (len(remove) == 0):
 			box_i = box_i + 1
 
 	#apply tesseract
 	for (startX, startY, endX, endY) in boxes:
 		#scale bounding boxes to ratio
-		startX = int(startX * ratio_width)
-		startY = int(startY * ratio_height)
-		endX = int(endX * ratio_width)
-		endY = int(endY * ratio_height)
+
+		startX = max(0, int(startX * ratio_width))
+		startY = max(0, int(startY * ratio_height))
+		endX = min(orig_width, int(endX * ratio_width))
+		endY = min(orig_height, int(endY * ratio_height))
 
 		"""
 		#calculate padding
