@@ -6,7 +6,7 @@ The idea came to me as I was brainstorming interesting projects I could work on 
 
 - __Search Engine Optimization__. An image post cannot be found from the text within the image. Transcribing the text allows for easier look up by the text content of the image.  
 - __Usability for the visually impared__. Many reddit users are not able to enjoy memes and other images posted on the platform due to their disability. This bot will allow them to better enjoy this type of content with the addition of text-to-speech or similar tools.
-- __Data Usage Saving__. An individual may want to save on their date usage due to limited bandwitdh or data cap. They can use the bot to read the text from the image without having to load the image themselves. This is especially relevant as images of tweets and other solid blobs of text are becoming increasingly common.
+- __Data Usage Saving__. An individual may want to save on their data usage due to having limited bandwidth or a data cap. They can use the bot to read the text from the image without having to load the image themselves. This is especially relevant now as images of tweets and other solid blobs of text are becoming increasingly more common.
 
 ### Main Technologies Used:
 - Python  
